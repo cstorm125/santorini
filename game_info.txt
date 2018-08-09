@@ -1,0 +1,11 @@
+santorini setups
+5x5 grid
+2 players
+2 workers each
+anywhere on the board
+move and build
+pieces
+	22 bases
+	18 mids
+	14 tops
+	18 domes
