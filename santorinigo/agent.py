@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from qnetwork import *
+from santorinigo.qnetwork import *
 
 #torch
 import torch
