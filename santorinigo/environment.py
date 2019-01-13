@@ -1,11 +1,26 @@
 import numpy as np
+from collections import deque
 
 class Santorini:
-    def __init__(self, board_dim = (5,5), starting_parts = np.array([0,22,18,14,18])):
+    def __init__(self, board_dim = (5,5), starting_parts = np.array([0,22,18,14,18]),
+                 history_len = 3, winning_floor=3):
+        #optional rules for curriculum learning
+        self.winning_floor = winning_floor
+        
+        #history recorder
+        self.history_len = history_len
+        self.buildings_layers = deque(maxlen=history_len)
+        self.minus_worker1_layers = deque(maxlen=history_len)
+        self.minus_worker2_layers = deque(maxlen=history_len)
+        self.plus_worker1_layers = deque(maxlen=history_len)
+        self.plus_worker2_layers = deque(maxlen=history_len)
+        
         #action_space: 2 workers * 8 moves * 8 builds = 128 options
         #moves/builds: q,w,e,a,d,z,x,c
+        self.board_dim = board_dim
         self.workers = [-1,-2]
-        self.moves = self.builds = ['q','w','e','a','d','z','x','c']
+        self.moves = ['q','w','e','a','d','z','x','c']
+        self.builds = ['q','w','e','a','d','z','x','c']
         #board[buildings/workers, vertical, horizontal]
         self.ktoc = {'q':(-1,-1),
                      'w':(-1,0),
@@ -20,10 +35,9 @@ class Santorini:
         self.action_dim = len(self.itoa)
         
         self.reset(board_dim, starting_parts)
-        self.state_dim_flat = len(self.get_state())
-        self.state_dim = self.get_state(flattened=False).shape
+        self.state_dim = self.get_state().shape
 
-    def reset(self, board_dim = (5,5), starting_parts=np.array([0,22,18,14,18])):
+    def reset(self, board_dim = (5,5), starting_parts=np.array([0,22,18,14,18])):        
         #turn counter
         self.turns = 0
         
@@ -43,6 +57,9 @@ class Santorini:
         self.board[1,0,2], self.board[1,4,2] = -1, -2 #negative workers for player 1
         self.board[1,2,0], self.board[1,2,4] =  1, 2 #positive workers for player 2
         
+        #history recorder
+        for i in range(self.history_len): self.record_state()
+
         return(self.get_state())
         
     def print_board(self):
@@ -50,19 +67,51 @@ class Santorini:
         print(f'Workers:\n {self.board[1,:,:]}')
         print(f'Parts:\n {self.board[2,:,:]}')
         
-    def get_state(self, flattened=True):
+    def get_buildings_layer(self):
+        buildings_layer = self.board[0,:,:].copy()
+        return(buildings_layer)
+    
+    def get_worker_layer(self, worker):
+        idx = np.where(self.board[1,:,:]==worker)
+        worker_layer = np.zeros(self.board_dim)
+        worker_layer[idx] = 1
+        return(worker_layer)
+    
+    def record_state(self):
+        self.buildings_layers.append(self.get_buildings_layer())
+        self.minus_worker1_layers.append(self.get_worker_layer(-1))
+        self.minus_worker2_layers.append(self.get_worker_layer(-2))
+        self.plus_worker1_layers.append(self.get_worker_layer(1))
+        self.plus_worker2_layers.append(self.get_worker_layer(2))
+    
+    def get_state(self, no_parts= True):
+        buildings = np.array(self.buildings_layers)
+        minus_worker1 = np.array(self.minus_worker1_layers)
+        minus_worker2 = np.array(self.minus_worker2_layers)
+        plus_worker1 = np.array(self.plus_worker1_layers)
+        plus_worker2 = np.array(self.plus_worker2_layers)
+        current_player = np.ones((1,)+self.board_dim) * self.current_player
+        parts = self.board[2,:,:].copy()[None,:]
+        
+        if no_parts:
+            state = np.vstack([buildings,minus_worker1,minus_worker2,plus_worker1,plus_worker2,current_player])
+        else:
+            state = np.vstack([parts,buildings,minus_worker1,minus_worker2,plus_worker1,plus_worker2,current_player])
+        return(state)
+
+    def get_board_state(self, no_parts= True):
         #current player has negative workers; opposing player has positive workers
         sgn = -np.sign(self.current_player)
         state = self.board.copy()
         state[1,:,:]*=sgn
-        if flattened: state = np.hstack([state[:2,:,:].flatten(),state[2,:,:].diagonal()])
+        if no_parts: state = state[:2,:,:]
         return(state)
     
     def score(self):
         #get position of current player's workers
-        worker_idx = np.sign(self.get_state(flattened=False)[1,:,:])==-1
+        worker_idx = np.sign(self.get_board_state()[1,:,:])==-1
         #check if workers at those positions are on top
-        if (self.board[0,:,:][worker_idx] == 3).any():
+        if (self.board[0,:,:][worker_idx] == self.winning_floor).any():
             reward = 1
         else:
             reward = 0
@@ -73,7 +122,7 @@ class Santorini:
         if worker not in [-1,-2]: raise ValueError('Wrong Worker')
         
         #get source and destinations
-        state = self.get_state(flattened=False)
+        state = self.get_board_state()
         worker_idx = np.where(state[1,:,:]==worker)
         src = (worker_idx[0][0],worker_idx[1][0])
         worker_num = self.board[1,src[0], src[1]]
@@ -102,7 +151,7 @@ class Santorini:
         if worker not in [-1,-2]: raise ValueError('Wrong Worker')
         
         #get source and destinations
-        state = self.get_state(flattened=False)
+        state = self.get_board_state()
         worker_idx = np.where(state[1,:,:]==worker)
         src = (worker_idx[0][0],worker_idx[1][0])
         worker_num = self.board[1,src[0], src[1]]
@@ -134,8 +183,8 @@ class Santorini:
             #print(f'Illegal Build\n Inbound: {inbound}\n Enough Parts: {enough_parts}\n Blank Tile: {blank_tile}')
             raise ValueError('Illegal Build')
                           
-    def step(self, action_idx, switch_player=True , flattened = True, move_reward = -1e-3,
-            too_many_mult = 5):
+    def step(self, action_idx, switch_player=True , move_reward = 0):
+        
         self.turns+=1
         reward = move_reward
         worker,move_key,build_key = self.itoa[action_idx]
@@ -144,28 +193,30 @@ class Santorini:
         try:
             self.move(worker,move_key)
         except:
-            next_state = self.get_state(flattened)
-            reward += -1e3
-            done = True
+            self.record_state()
             if switch_player: self.current_player *= -1
+            next_state = self.get_state()
+            reward += -1
+            done = True
             return(next_state,reward,done,self.current_player)
             
         #try to build
         try:
             self.build(worker,build_key)
         except:
-            next_state = self.get_state(flattened)
-            reward += -1e3
-            done = True
+            self.record_state()
             if switch_player: self.current_player *= -1
+            next_state = self.get_state()
+            reward += -1
+            done = True
             return(next_state,reward,done,self.current_player)
         
-        #check if it's already too many turns
-        too_many_turns = self.turns > too_many_mult * self.starting_parts.sum()
-        next_state = self.get_state(flattened)
-        reward += self.score()
-        done = True if (self.score()==1 or too_many_turns) else False
+        #move on
+        self.record_state()
         if switch_player: self.current_player *= -1
+        next_state = self.get_state()
+        reward += self.score()
+        done = True if (self.score()==1) else False
         return(next_state,reward,done,self.current_player)
     
     def legal_moves(self):
