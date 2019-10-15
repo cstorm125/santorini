@@ -23,7 +23,7 @@ We slightly modified the original [Santorini](https://boardgamegeek.com/boardgam
     * No more than one level higher than the current position
 * Using that worker at the new current position, the player then choose to build on a cell that is:
     * Adjacent to the current position in all eight directions
-    * Building progression is as follows: Empty Floor \{rightarrow} First Floor \{rightarrow} Second Floor \{rightarrow} Third Floor \{rightarrow} Dome
+    * Building progression is as follows: Empty Floor -> First Floor -> Second Floor -> Third Floor -> Dome
     * A worker cannot build if there are no parts left
     
 ### Win Condition
@@ -162,11 +162,3 @@ while True:
     #break if done
     if done: break
 ```
-
-## Agents
-
-### Q-networks
-
-### PPO
-
-### A3C

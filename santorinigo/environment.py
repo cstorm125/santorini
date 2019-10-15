@@ -22,6 +22,7 @@ class Santorini:
         self.moves = ['q','w','e','a','d','z','x','c']
         self.builds = ['q','w','e','a','d','z','x','c']
         #board[buildings/workers, vertical, horizontal]
+        #key to coordinates
         self.ktoc = {'q':(-1,-1),
                      'w':(-1,0),
                      'e':(-1,1),
@@ -30,7 +31,9 @@ class Santorini:
                      'z':(1,-1),
                      'x':(1,0),
                      'c':(1,1)}
+        #index to action
         self.itoa = [(w,m,b) for w in self.workers for m in self.moves for b in self.builds]
+        #action to index
         self.atoi = {action:index for index,action in enumerate(self.itoa)}
         self.action_dim = len(self.itoa)
         
@@ -94,9 +97,11 @@ class Santorini:
         parts = self.board[2,:,:].copy()[None,:]
         
         if no_parts:
-            state = np.vstack([buildings,minus_worker1,minus_worker2,plus_worker1,plus_worker2,current_player])
+            state = np.vstack([buildings,minus_worker1,minus_worker2,
+                               plus_worker1,plus_worker2,current_player])
         else:
-            state = np.vstack([parts,buildings,minus_worker1,minus_worker2,plus_worker1,plus_worker2,current_player])
+            state = np.vstack([parts,buildings,minus_worker1,minus_worker2,
+                               plus_worker1,plus_worker2,current_player])
         return(state)
 
     def get_board_state(self, no_parts= True):
@@ -180,11 +185,9 @@ class Santorini:
         elif inbound & (not enough_parts) & blank_tile:
             pass
         else:
-            #print(f'Illegal Build\n Inbound: {inbound}\n Enough Parts: {enough_parts}\n Blank Tile: {blank_tile}')
             raise ValueError('Illegal Build')
                           
     def step(self, action_idx, switch_player=True , move_reward = 0):
-        
         self.turns+=1
         reward = move_reward
         worker,move_key,build_key = self.itoa[action_idx]
